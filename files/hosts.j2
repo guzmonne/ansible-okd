@@ -8,47 +8,43 @@ etcd
 
 # Set variables common for all OSEv3 hosts
 [OSEv3:vars]
-ansible_ssh_user={{ user }}
-ansible_ssh_private_key_file=/home/{{ user }}/.ssh/{{ kp_name }}
+ansible_ssh_user=centos
+ansible_ssh_private_key_file=/home/{{ ansible_ssh_user }}/.ssh/{{ kp_name }}
 ansible_become=true
+# Enable Firewall ID
+os_firewall_use_firewalld=True
+# Openshift deployment type
 openshift_deployment_type=origin
-openshift_release='3.10'
-openshift_pkg_version=-3.10.0
-openshift_image_tag='v3.10'
+# Disable hardware checks
 openshift_disable_check=disk_availability,memory_availability
-
-# uncomment the following to enable htpasswd authentication; defaults to AllowAllPasswordIdentityProvider
-#openshift_master_identity_providers=[{'name': 'htpasswd_auth', 'login': 'true', 'challenge': 'true', 'kind': 'HTPasswdPasswordIdentityProvider'}]
-
-# Native high availability cluster method with optional load balancer.
-# If no lb group is defined installer assumes that a load balancer has
-# been preconfigured. For installation the value of
-# openshift_master_cluster_hostname must resolve to the load balancer
-# or to one or all of the masters defined in the inventory if no load
-# balancer is present.
+# Set domain and lad balancing method
 openshift_master_default_subdomain={{ domain }}
 openshift_master_cluster_method=native
 openshift_master_cluster_hostname=internal.{{ domain }}
 openshift_master_cluster_public_hostname=cluster.{{ domain }}
-#openshift_master_overwrite_named_certificates=true
-#openshift_master_named_certificates=[{"certfile": "/etc/ansible/{{ domain }}.cer", "keyfile": "/etc/ansible/{{ domain }}.key", "names": ["cluster.{{ domain }}"], "cafile": "/etc/ansible/ca.cer"}]
 # allow unencrypted connection within cluster
 openshift_docker_insecure_registries={{ private_subnet }}
+# Configure the certificate validity
+openshift_hosted_registry_cert_expire_days=1825
+openshift_ca_cert_expire_days=1825
+openshift_node_cert_expire_days=1825
+openshift_master_cert_expire_days=1825
+etcd_ca_default_days=1825
+# Install the OpenShift catalog
+openshift_enable_service_catalog=True
+# Install the OpenShift Ansible Broker
+ansible_service_broker_install=False
+# Configuring the Template Service Broker
+template_service_broker_install=False
 
 # host group for masters
 [masters]
-{% for server in servers %}
-{{ server.name }}.{{ domain }}
-{% endfor %}
+aio-0[1:3].okd.conatest.click
 
 # host group for etcd
 [etcd]
-{% for server in servers %}
-{{ server.name }}.{{ domain }}
-{% endfor %}
+aio-0[1:3].okd.conatest.click
 
-# host group for nodes, includes region info
+# host group for nodes
 [nodes]
-{% for server in servers %}
-{{ server.name }}.{{ domain }} openshift_node_group_name='node-config-all-in-one'
-{% endfor %}
+aio-0[1:3].okd.conatest.click openshift_node_group_name='node-config-all-in-one'

@@ -1,6 +1,7 @@
 ---
 - hosts: bastion
   name: Configure the bastion host
+  gather_facts: no
   become: yes
   tasks:
     - name: Change hostname
@@ -19,6 +20,18 @@
         content: |
           127.0.0.1 {{ hostname }}
       when: hostname is defined
+
+    - name: Copy profile configuration
+      tags:
+        - profile
+      copy:
+        src: ./files/profile.sh
+        dest: /etc/profile.d/profile.sh
+
+    - name: Reboot the server
+      tags:
+        - profile
+      reboot:
 
     - name: Fix locale issue
       tags:
@@ -54,18 +67,46 @@
       apt:
         name: '{{ item }}'
       tags:
-        - dependencies
+        - ansible
       loop:
         - ansible
 
     - name: Copy the ssh private key
       become: no
       tags:
-        - openshift-ansible
-        - credentials
+        - ssh
       copy:
         src: '{{ kp_file }}'
-        dest: '/home/{{ ansible_user }}/.ssh/{{kp_name}}'
+        dest: '/home/{{ ansible_ssh_user }}/.ssh/{{kp_name}}'
         mode: 0400
-        owner: '{{ ansible_user }}'
-        group: '{{ ansible_user }}'
+        owner: '{{ ansible_ssh_user }}'
+        group: '{{ ansible_ssh_user }}'
+    
+    - name: Clone the Ansible-OKD repo
+      become: no
+      tags:
+        - ansible
+      git:
+        repo: 'https://github.com/guzmonne/ansible-okd.git'
+        dest: '/home/{{ansible_ssh_user}}/okd'
+
+    - name: Remove vim installation
+      tags: spf13
+      apt:
+        name: vim
+        state: absent
+
+    - name: Install vim-nox
+      tags: spf13
+      apt:
+        name: vim-nox
+        state: present
+
+    - name: Copy hosts file
+      tags:
+        - openshift-ansible
+      template:
+        src: ./files/hosts.j2
+        dest: /etc/ansible/hosts
+        mode: 0644
+      register: verify

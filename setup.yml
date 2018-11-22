@@ -1,0 +1,199 @@
+---
+- hosts: okd
+  name: Configure hosts for OKD installation
+  vars_files:
+    - ./vars/okd.yml
+    - ./secret/credentials.yml
+  become: yes
+  tasks:
+    - name: Change hostname
+      tags:
+        - server-setup
+        - hostname
+      hostname:
+        name: '{{ hostname }}'
+      when: hostname is defined
+
+    - name: Change hosts file
+      tags:
+        - server-setup
+        - hostname
+      blockinfile:
+        path: /etc/hosts
+        regexp: '^127.0.0.1'
+        content: |
+          {{ private_ip }} {{ hostname }} {{hostname}}.{{ domain }}
+      when: hostname is defined
+
+    - name: Fix locale issue
+      tags:
+        - server-setup
+      blockinfile:
+        dest: /etc/environment
+        block: |
+          LANG=en_US.utf-8
+          LC_ALL=en_US.utf-8
+
+    - name: Add paths to PATH environment variable
+      tags:
+        - server-setup
+      copy:
+        dest: /etc/profile.d/custon-path.sh
+        content: 'PATH=$PATH:{{ custom_path }}'
+
+    - name: Copy profile configuration
+      tags:
+        - server-setup
+      copy:
+        src: ./files/profile.sh
+        dest: /etc/profile.d/profile.sh
+
+    - name: Yum update
+      tags:
+        - server-setup
+      yum:
+        update_cache: yes
+
+    - name: Reboot the server
+      tags:
+        - server-setup
+      reboot:
+
+    - name: Install dependencies
+      tags:
+        - server-setup
+      yum:
+        name: '{{ item }}'
+        update_cache: no
+      loop: '{{ dependencies }}'
+
+    - name: Modify the docker-storage-setup file
+      tags:
+        - docker-setup
+        - docker-storage-setup
+      copy:
+        dest: /etc/sysconfig/docker-storage-setup
+        content: |
+          STORAGE_DRIVER=overlay2
+          DEVS=/dev/xvdf
+          CONTAINER_ROOT_LV_NAME=dockerlv
+          CONTAINER_ROOT_LV_SIZE=100%FREE
+          CONTAINER_ROOT_LV_MOUNT_PATH=/var/lib/docker
+          VG=dockervg
+
+    - name: Configuring docker storage
+      tags:
+        - docker-setup
+        - docker-storage-setup
+      shell: '/usr/bin/docker-storage-setup'
+      register: verify
+
+    - debug:
+        var: verify
+      tags:
+        - docker-setup
+        - docker-storage-setup
+
+    - name: Verify docker-storage configuration
+      tags:
+        - docker-setup
+        - docker-storage-setup
+      shell: 'cat /etc/sysconfig/docker-storage'
+      register: verify
+
+    - debug:
+        var: verify
+      tags:
+        - docker-setup
+        - docker-storage-setup
+
+    - name: Verifiy lvs volume configuration
+      tags:
+        - docker-setup
+        - docker-storage-setup
+      shell: 'lvs'
+      register: verify
+
+    - debug:
+        var: verify
+      tags:
+        - docker-setup
+        - docker-storage-setup
+
+    - name: Managing container logs
+      tags:
+        - docker-setup
+        - docker-logs
+      lineinfile:
+        path: /etc/sysconfig/docker
+        regexp: "OPTIONS='--selinux-enabled --log-driver=journald --signature-verification=false'"
+        line: "OPTIONS='--insecure-registry=172.30.0.0/16 --selinux-enabled --log-opt max-size=1M --log-opt max-file=3'"
+
+    - name: Add the eperl-release-latest-7 repo
+      tags:
+        - openshift-ansible
+        - openshift-ansible-repo
+      yum:
+        name: https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+        state: present
+
+    - name: Disable epel.repo
+      shell: 'sed -i -e "s/^enabled=1/enabled=0/" /etc/yum.repos.d/epel.repo'
+      tags:
+        - openshift-ansible
+        - openshift-ansible-repo
+
+    - name: Install Ansible
+      yum:
+        name: '{{ item }}'
+        enablerepo: epel
+      tags:
+        - openshift-ansible
+        - openshift-ansible-repo
+      loop:
+        - ansible
+        - pyOpenSSL
+
+    - name: Clone the Openshift Ansible Repo
+      tags:
+        - openshift-ansible
+        - openshift-ansible-repo
+      git:
+        repo: 'https://github.com/openshift/openshift-ansible'
+        dest: '/tmp/openshift-ansible'
+
+    - name: Checkout release-3.10 branch
+      tags:
+        - openshift-ansible
+        - openshift-ansible-repo
+      shell: 'cd /tmp/openshift-ansible && git checkout release-3.10'
+
+    - name: Copy the ssh private key
+      tags:
+        - openshift-ansible
+        - credentials
+      copy:
+        src: '{{ kp_file }}'
+        dest: '/home/{{ user }}/.ssh/{{kp_name}}'
+        mode: 0400
+        owner: '{{ user }}'
+        group: '{{ user }}'
+
+    - name: Copy hosts file
+      tags:
+        - openshift-ansible
+        - hosts
+      template:
+        src: ./files/hosts.j2
+        dest: /etc/ansible/hosts
+        mode: 0644
+      register: verify
+
+    - name: Reload the docker service
+      tags:
+        - docker-setup
+        - docker-logs
+        - openshift-ansible
+      systemd:
+        name: docker
+        state: reloaded

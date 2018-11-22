@@ -1,0 +1,79 @@
+---
+project: okd
+
+aws_region: us-east-1
+aws_kp_name: '{{ project }}_kp'
+aws_kp_file: './secret/{{ aws_kp_name }}.pem'
+aws_sg_name: '{{project}}_sg'
+aws_ec2_user: centos
+aws_ec2_python_interpreter: /usr/bin/python
+aws_vpc_id: vpc-7c144b05
+aws_subnet_id: subnet-1edf9e32
+aws_sg_rules:
+  - proto: udp
+    ports:
+      - 4789
+      - 53
+      - 8053
+      - 2049
+    cidr_ip: 0.0.0.0/0
+  - proto: tcp
+    ports:
+      - 53
+      - 8053
+      - 443
+      - 8443
+      - 10250
+      - 10010
+      - 2049
+      - 2379
+      - 2380
+      - 9000
+      - 8444
+      - 22
+      - 80
+      - 1936
+      - 2379
+      - 2380
+      - 9200
+      - 9300
+    cidr_ip: 0.0.0.0/0
+
+servers:
+  - index: 1
+    id: okd-01.04
+    name: okd-01
+    instance: t2.medium
+    image: ami-9887c6e7
+  - index: 2
+    id: okd-02.04
+    name: okd-02
+    instance: t2.medium
+    image: ami-9887c6e7
+  - index: 3
+    id: okd-03.04
+    name: okd-03
+    instance: t2.medium
+    image: ami-9887c6e7
+
+custom_path: '/bin:/sbin/:/usr/bin:/usr/sbin'
+dependencies:
+  - wget
+  - git
+  - net-tools
+  - bind-utils
+  - yum-utils
+  - iptables-services
+  - bridge-utils
+  - bash-completion
+  - kexec-tools
+  - sos
+  - psacct
+  - atomic
+  - docker-1.13.1
+
+kp_name: '{{ project }}_kp'
+kp_file: './secret/{{ kp_name }}.pem'
+user: centos
+domain: 'okd.conatest.click'
+private_subnet: 172.31.0.0/16

@@ -1,0 +1,54 @@
+# Create an OSEv3 group that contains the master, nodes, etcd, and lb groups.
+# The lb group lets Ansible configure HAProxy as the load balancing solution.
+# Comment lb out if your load balancer is pre-configured.
+[OSEv3:children]
+masters
+nodes
+etcd
+
+# Set variables common for all OSEv3 hosts
+[OSEv3:vars]
+ansible_ssh_user={{ user }}
+ansible_ssh_private_key_file=/home/{{ user }}/.ssh/{{ kp_name }}
+ansible_become=true
+openshift_deployment_type=origin
+openshift_release='3.10'
+openshift_pkg_version=-3.10.0
+openshift_image_tag='v3.10'
+openshift_disable_check=disk_availability,memory_availability
+
+# uncomment the following to enable htpasswd authentication; defaults to AllowAllPasswordIdentityProvider
+#openshift_master_identity_providers=[{'name': 'htpasswd_auth', 'login': 'true', 'challenge': 'true', 'kind': 'HTPasswdPasswordIdentityProvider'}]
+
+# Native high availability cluster method with optional load balancer.
+# If no lb group is defined installer assumes that a load balancer has
+# been preconfigured. For installation the value of
+# openshift_master_cluster_hostname must resolve to the load balancer
+# or to one or all of the masters defined in the inventory if no load
+# balancer is present.
+openshift_master_default_subdomain={{ domain }}
+openshift_master_cluster_method=native
+openshift_master_cluster_hostname=internal.{{ domain }}
+openshift_master_cluster_public_hostname=cluster.{{ domain }}
+#openshift_master_overwrite_named_certificates=true
+#openshift_master_named_certificates=[{"certfile": "/etc/ansible/{{ domain }}.cer", "keyfile": "/etc/ansible/{{ domain }}.key", "names": ["cluster.{{ domain }}"], "cafile": "/etc/ansible/ca.cer"}]
+# allow unencrypted connection within cluster
+openshift_docker_insecure_registries={{ private_subnet }}
+
+# host group for masters
+[masters]
+{% for server in servers %}
+{{ server.name }}.{{ domain }}
+{% endfor %}
+
+# host group for etcd
+[etcd]
+{% for server in servers %}
+{{ server.name }}.{{ domain }}
+{% endfor %}
+
+# host group for nodes, includes region info
+[nodes]
+{% for server in servers %}
+{{ server.name }}.{{ domain }} openshift_node_group_name='node-config-all-in-one'
+{% endfor %}

@@ -1,0 +1,71 @@
+---
+- hosts: okd
+  name: Configure hosts for OKD installation
+  vars_files:
+    - ./vars/okd.yml
+    - ./secret/credentials.yml
+  become: yes
+  tasks:
+    - name: Clone the acme.sh Github repo
+      tags:
+        - letsencrypt
+      git:
+        repo: 'https://github.com/Neilpang/acme.sh.git'
+        dest: '/tmp/acme.sh'
+      when: master is defined and master == True
+
+    - name: Install acme.sh
+      tags:
+        - letsencrypt
+      shell: 'cd /tmp/acme.sh && ./acme.sh --install'
+      when: master is defined and master == True
+
+    - name: Configure Route53 credentials
+      tags:
+        - letsencrypt
+        - letsencrypt-cert
+      blockinfile:
+        dest: /root/.acme.sh/account.conf
+        content: |
+          AWS_ACCESS_KEY_ID={{ aws_access_key }}
+          AWS_SECRET_ACCESS_KEY={{ aws_secret_key }}
+      when: master is defined and master == True
+
+    - name: Issue a CERT
+      tags:
+        - letsencrypt
+        - letsencrypt-cert
+      shell: '/root/.acme.sh/acme.sh --issue --dns dns_aws -d okd.conatest.click -d *.okd.conatest.click'
+      when: master is defined and master == True
+
+    - name: Copy .cer files
+      tags:
+        - letsencrypt
+        - letsencrypt-cert
+        - letsencrypt-copy
+      shell: '/usr/bin/cp /root/.acme.sh/{{ domain }}/{{ domain }}.cer /etc/ansible'
+      when: master is defined and master == True
+
+    - name: Copy .key files
+      tags:
+        - letsencrypt
+        - letsencrypt-cert
+        - letsencrypt-copy
+      shell: '/usr/bin/cp /root/.acme.sh/{{ domain }}/{{ domain }}.key /etc/ansible'
+      when: master is defined and master == True
+
+    - name: Copy ca.cer files
+      tags:
+        - letsencrypt
+        - letsencrypt-cert
+        - letsencrypt-copy
+      shell: '/usr/bin/cp /root/.acme.sh/{{ domain }}/ca.cer /etc/ansible'
+      when: master is defined and master == True
+
+    - name: Copy fullchain.cer
+      tags:
+        - letsencrypt
+        - letsencrypt-cert
+        - letsencrypt-copy
+      shell: '/usr/bin/cp /root/.acme.sh/{{ domain }}/fullchain.cer /etc/ansible'
+      when: master is defined and master == True

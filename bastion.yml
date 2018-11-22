@@ -1,0 +1,71 @@
+---
+- hosts: bastion
+  name: Configure the bastion host
+  become: yes
+  tasks:
+    - name: Change hostname
+      tags:
+        - hostname
+      hostname:
+        name: '{{ hostname }}'
+      when: hostname is defined
+
+    - name: Change hosts file
+      tags:
+        - hosts-file
+      blockinfile:
+        path: /etc/hosts
+        regexp: '^127.0.0.1'
+        content: |
+          127.0.0.1 {{ hostname }}
+      when: hostname is defined
+
+    - name: Fix locale issue
+      tags:
+        - locale
+      blockinfile:
+        dest: /etc/environment
+        block: |
+          LANG=en_US.utf-8
+          LC_ALL=en_US.utf-8
+
+    - name: Install Ansible dependencies
+      apt:
+        name: '{{ item }}'
+      tags:
+        - ansible
+      loop:
+        - software-properties-common
+
+    - name: Add apt repository
+      tags:
+        - ansible
+      apt_repository:
+        repo: 'ppa:ansible/ansible'
+        state: present
+
+    - name: Update repository cache
+      tags:
+        - ansible
+      apt:
+        update_cache: yes
+
+    - name: Install Ansible
+      apt:
+        name: '{{ item }}'
+      tags:
+        - dependencies
+      loop:
+        - ansible
+
+    - name: Copy the ssh private key
+      become: no
+      tags:
+        - openshift-ansible
+        - credentials
+      copy:
+        src: '{{ kp_file }}'
+        dest: '/home/{{ ansible_user }}/.ssh/{{kp_name}}'
+        mode: 0400
+        owner: '{{ ansible_user }}'
+        group: '{{ ansible_user }}'

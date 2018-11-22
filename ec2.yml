@@ -1,0 +1,135 @@
+- hosts: 127.0.0.1
+  connection: local
+  gather_facts: no
+  name: Create ec2 instances
+  vars_files:
+    - ./vars/okd.yml
+  tasks:
+    - name: 'Create a new ec2 key pair, returns generated private key'
+      tags:
+        - aws
+      ec2_key:
+        region: '{{aws_region}}'
+        name: '{{aws_kp_name}}'
+      register: pair
+
+    - name: 'Create the {{aws_kp_name}} file'
+      tags:
+        - aws
+      lineinfile:
+        dest: '{{aws_kp_file}}'
+        line: '{{pair.key.private_key}}'
+        mode: 0400
+        create: yes
+      when: pair["key"]["private_key"] is defined
+
+    - name: 'Create EC2 security group for project {{ project }}'
+      tags:
+        - aws
+      ec2_group:
+        name: '{{aws_sg_name}}'
+        description: 'Security group for project {{project}}'
+        vpc_id: '{{aws_vpc_id}}'
+        region: '{{aws_region}}'
+        rules: '{{aws_sg_rules}}'
+      register: sg
+
+    - name: 'Create the EC2 server on subnet {{aws_subnet_id}}'
+      tags:
+        - aws
+      ec2:
+        id: '{{ item.id }}'
+        region: '{{ aws_region }}'
+        key_name: '{{ aws_kp_name }}'
+        group_id: '{{ sg.group_id }}'
+        instance_type: '{{ item.instance }}'
+        image: '{{ item.image }}'
+        wait: yes
+        wait_timeout: 500
+        count: 1
+        volumes:
+          - device_name: /dev/sda1                                                                                                                                                                                                                                                                                           
+            volume_type: gp2                                                                                                                                                                                                                                                                                                 
+            volume_size: 9                                                                                                                                                                                                                                                                                                   
+            delete_on_termination: true                                                                                                                                                                                                                                                                                      
+          - device_name: /dev/xvda                                                                                                                                                                                                                                                                                            
+            volume_type: gp2
+            volume_size: 100                                                                                                                                                                                                                                                                                                  
+            delete_on_termination: true  
+        instance_tags:
+          Name: '{{ item.name }}'
+          Group: '{{ project }}'
+          Project: '{{ project }}'
+        monitoring: yes
+        vpc_subnet_id: '{{aws_subnet_id}}'
+        assign_public_ip: yes
+      loop: '{{ servers }}'
+      register: ec2_instances
+
+    - name: Get EC2 instances
+      tags:
+        - aws
+      set_fact:
+        instances: []
+
+    - set_fact:
+        instances: '{{ instances }} + [ {{ item.instances[0] }} ]'
+      tags:
+        - aws
+      loop: '{{ ec2_instances.results }}'
+
+    - debug:
+        var: instances
+      tags:
+        - aws
+
+    - name: Set DNS records
+      route53:
+        state: present
+        zone: '{{domain}}'
+        record: '{{ item["tags"]["Name"] }}.{{ domain }}'
+        type: A
+        value: '{{ item.private_ip }}'
+        wait: yes
+        overwrite: true
+      register: dns
+      async: 1
+      poll: 0
+      tags:
+        - aws
+      loop: '{{ instances }}'
+
+    - name: Set DNS records
+      route53:
+        state: present
+        zone: '{{domain}}'
+        record: '{{ item["tags"]["Name"] }}-external.{{ domain }}'
+        type: A
+        value: '{{ item.public_ip }}'
+        wait: yes
+        overwrite: true
+      register: dns
+      async: 1
+      poll: 0
+      tags:
+        - aws
+      loop: '{{ instances }}'
+
+    - name: Add host to group '{{ project }}'
+      tags:
+        - aws
+      add_host:
+        name: '{{ item.public_ip }}'
+        groups: '{{ project }}'
+        ansible_ssh_private_key_file: '{{ aws_kp_file }}'
+        ansible_user: '{{ aws_ec2_user }}'
+        ansible_python_interpreter: '{{aws_ec2_python_interpreter}}'
+      loop: '{{ instances }}'
+
+    - name: Wait for SSH
+      tags:
+        - aws
+      wait_for:
+        port: 22
+        host: '{{ item.public_ip }}'
+      loop: '{{ instances }}'

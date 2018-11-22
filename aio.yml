@@ -1,0 +1,55 @@
+---
+- name: Prepare servers for OKD installation
+  hosts: okd
+  become: yes
+  gather_facts: no
+  vars_files:
+    - ./vars/aio.yml
+  tasks:
+    - name: Change hostname
+      hostname:
+        name: '{{ inventory_hostname  }}'
+    - name: Change hosts file
+      blockinfile:
+        path: /etc/hosts
+        regexp: '127.0.0.1'
+        content: |
+          {{ private_ip  }} {{ inventory_hostname  }}
+    - name: Copy profile configuration
+      copy:
+        src: ./files/profile.sh
+        dest: /etc/profile.d/profile.sh
+    - name: Add paths to PATH environment variable
+      copy:
+        dest: /etc/profile.d/custon-path.sh
+        content: 'PATH=$PATH:/bin:/sbin/:/usr/bin:/usr/sbin'
+    - name: Yum update
+      yum:
+        update_cache: yes
+    - name: Install dependencies
+      yum:
+        name: '{{ item }}'
+        update_cache: no
+      loop: '{{ dependencies }}'
+    - name: Update system
+      shell: 'yum update -y'
+    - name: Modify the docker-storage-setup file
+      copy:
+        dest: /etc/sysconfig/docker-storage-setup
+        content: |
+          STORAGE_DRIVER=overlay2
+          DEVS=/dev/xvdb
+          CONTAINER_ROOT_LV_NAME=dockerlv
+          CONTAINER_ROOT_LV_SIZE=100%FREE
+          CONTAINER_ROOT_LV_MOUNT_PATH=/var/lib/docker
+          VG=dockervg
+    - name: Configuring docker storage
+      shell: '/usr/bin/docker-storage-setup'
+    - name: Reboot the server
+      reboot:
+     
+
+
+
+
+

@@ -3,7 +3,6 @@
   name: Configure hosts for OKD installation
   vars_files:
     - ./vars/okd.yml
-    - ./secret/credentials.yml
   become: yes
   tasks:
     - name: Change hostname
@@ -53,11 +52,6 @@
         - server-setup
       yum:
         update_cache: yes
-
-    - name: Reboot the server
-      tags:
-        - server-setup
-      reboot:
 
     - name: Install dependencies
       tags:
@@ -129,7 +123,7 @@
         regexp: "OPTIONS='--selinux-enabled --log-driver=journald --signature-verification=false'"
         line: "OPTIONS='--insecure-registry=172.30.0.0/16 --selinux-enabled --log-opt max-size=1M --log-opt max-file=3'"
 
-    - name: Add the eperl-release-latest-7 repo
+    - name: Add the epel-release-latest-7 repo
       tags:
         - openshift-ansible
         - openshift-ansible-repo
@@ -189,11 +183,7 @@
         mode: 0644
       register: verify
 
-    - name: Reload the docker service
+    - name: Reboot the server
       tags:
-        - docker-setup
-        - docker-logs
-        - openshift-ansible
-      systemd:
-        name: docker
-        state: reloaded
+        - server-setup
+      reboot:

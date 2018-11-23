@@ -1,0 +1,118 @@
+---
+# ---
+# To use this playbook you must first create a private key and a certificate
+# request file. You can do this with openssl for example.
+# 
+# Domain: *.example.com
+# 
+# Previous steps:
+#   1.  Create a new folder to contain the certificates.
+#     mkdir *.example.com
+#   2.  Create a new private key file with openssl.
+#     openssl genrsa -out *.example.com/*.example.com.key
+#   3a. Create a new certificate requests.
+#     openssl req -out *.example.com/*.example.com.csr -key secret/*.example.com.key -new
+#   3b. [Optional] Create the account_key_src key to sing acme challenges.
+#     openssl genrsa -out account.key
+#   4. Run the playbook
+#     ansible-playbook acme.yml
+# ---
+- hosts: 127.0.0.1
+  connection: local
+  gather_facts: no
+  vars:
+    email: aws@conatel.com.uy
+    account_key: ./secret/account_key.pem
+    acme_directory: https://acme-staging-v02.api.letsencrypt.org/directory
+    acme_directory_production: https://acme-v02.api.letsencrypt.org/directory
+    csr: './secret/{{resource}}/{{ resource }}.csr'
+    cert: './secret/{{resource}}/{{ resource }}.cer'
+    chain: './secret/{{resource}}/ca.cer'
+    fullchain: './secret/{{resource}}/fullchain.crt'
+    production: False
+  tasks:
+    - name: Check variables
+      assert:
+        that: 
+          - domain is defined
+          - resource is defined
+    
+    - name: 'Create a challenge for {{ resource }} using the account_key file.'
+      acme_certificate:
+        account_email: '{{ email }}'
+        account_key: '{{ account_key }}'
+        acme_directory: '{{ acme_directory }}'
+        acme_version: 2
+        challenge: dns-01
+        csr: '{{ csr }}'
+        cert: '{{ cert }}'
+        chain: '{{ chain }}'
+        fullchain: '{{ fullchain }}'
+        force: yes
+        terms_agreed: yes
+      register: acme
+      when: production is not defined
+
+    - name: 'Create a challenge for {{ resource }} using the account_key file.'
+      acme_certificate:
+        account_email: '{{ email }}'
+        account_key: '{{ account_key }}'
+        acme_directory: '{{ acme_directory_production }}'
+        acme_version: 2
+        challenge: dns-01
+        csr: '{{ csr }}'
+        cert: '{{ cert }}'
+        chain: '{{ chain }}'
+        fullchain: '{{ fullchain }}'
+        force: yes
+        terms_agreed: yes
+      register: acme
+      when: production is defined
+
+    - name: 'Fulfill the challenge for {{ resource }}'
+      route53:
+        zone: '{{ domain }}'
+        record: '{{ acme["challenge_data"][resource]["dns-01"]["record"] }}'
+        type: TXT
+        ttl: 0
+        state: present
+        overwrite: yes
+        # Note: route53 requires TXT entries to be enclosed in quotes.
+        value: '"{{acme["challenge_data"][resource]["dns-01"]["resource_value"] }}"'
+      when: acme is changed
+
+    - name: Wait for 120 seconds to let route53 settle in
+      wait_for: 
+        timeout: 120
+
+    - name: Let the challenge be validated and retrieve the cert, ca, and fullchain
+      acme_certificate:
+        account_email: '{{ email }}'
+        account_key: '{{ account_key }}'
+        acme_directory: '{{ acme_directory }}'
+        acme_version: 2
+        challenge: dns-01
+        csr: '{{ csr }}'
+        cert: '{{ cert }}'
+        chain: '{{ chain }}'
+        fullchain: '{{ fullchain }}'
+        force: yes
+        terms_agreed: yes
+        data: '{{ acme }}'
+      when: production is not defined
+
+    - name: Let the challenge be validated and retrieve the cert, ca, and fullchain
+      acme_certificate:
+        account_email: '{{ email }}'
+        account_key: '{{ account_key }}'
+        acme_directory: '{{ acme_directory_production }}'
+        acme_version: 2
+        challenge: dns-01
+        csr: '{{ csr }}'
+        cert: '{{ cert }}'
+        chain: '{{ chain }}'
+        fullchain: '{{ fullchain }}'
+        force: yes
+        terms_agreed: yes
+        data: '{{ acme }}'
+      when: production is defined

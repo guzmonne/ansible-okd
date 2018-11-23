@@ -19,13 +19,25 @@
         state: directory
         group: nginx
         mode: "g+s"
+    - name: Copy test file
+      tags: test
+      copy:
+        dest: /var/lib/letsencrypt/.well-known/acme-challenge/index.html
+        src: ./files/index.html
+        group: nginx
+        owner: nginx
     - name: Copy letsencrypt snippet
       copy:
         dest: /etc/nginx/snippets/letsencrypt.conf
         src: ./files/letsencrypt.conf
+    - name: Copy Nginx comnfiguration file.
+      tags: configuration
+      copy:
+        dest: /etc/nginx/nginx.conf
+        src: ./files/nginx.conf
     - name: Copy default configuration
       template:
-        dest: /etc/nginx/conf.d/default
+        dest: '/etc/nginx/conf.d/{{openshift_master_cluster_public_hostname}}.conf'
         src: ./files/default.j2
     - name: Turn the nginx service on.
       tags: service

@@ -1,6 +1,8 @@
 server {
   listen {{ letsencrypt_port  }};
-  server_name {{ openshift_master_cluster_public_hostname  }};
+  server_name {{ openshift_master_cluster_public_hostname  }} {{ inventory_hostname  }} ;
+
+  root /var/lib/letsencrypt;
 
   include snippets/letsencrypt.conf;
 }

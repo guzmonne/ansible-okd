@@ -45,11 +45,33 @@
           VG=dockervg
     - name: Configuring docker storage
       shell: '/usr/bin/docker-storage-setup'
+    - name: Managing container logs
+      lineinfile:
+        path: /etc/sysconfig/docker
+        regexp: "OPTIONS='--selinux-enabled --log-driver=journald --signature-verification=false'"
+        line: "OPTIONS='--insecure-registry=172.30.0.0/16 --selinux-enabled --log-opt max-size=1M --log-opt max-file=3'"
+    - name: Add the epel-release-latest-7 repo
+      yum:
+        name: https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+        state: present
+    - name: Disable epel.repo
+      shell: 'sed -i -e "s/^enabled=1/enabled=0/" /etc/yum.repos.d/epel.repo'
+    - name: Install Ansible
+      yum:
+        name: '{{ item }}'
+        enablerepo: epel
+      tags:
+        - openshift-ansible
+        - openshift-ansible-repo
+      loop:
+        - ansible
+        - pyOpenSSL
+    - name: Copy the ssh private key
+      copy:
+        src: '{{ kp_file }}'
+        dest: '/home/{{ ansible_user }}/.ssh/{{kp_name}}'
+        mode: 0400
+        owner: '{{ ansible_user }}'
+        group: '{{ ansible_user }}'
     - name: Reboot the server
       reboot:
-     
-
-
-
-
-

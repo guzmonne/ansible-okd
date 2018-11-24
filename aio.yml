@@ -10,11 +10,12 @@
       hostname:
         name: '{{ inventory_hostname  }}'
     - name: Change hosts file
+      tags: hosts
       blockinfile:
         path: /etc/hosts
         regexp: '127.0.0.1'
         content: |
-          {{ private_ip  }} {{ inventory_hostname  }}
+          {{ openshift_ip  }} {{ inventory_hostname  }}
     - name: Copy profile configuration
       copy:
         src: ./files/profile.sh
@@ -44,6 +45,7 @@
           CONTAINER_ROOT_LV_MOUNT_PATH=/var/lib/docker
           VG=dockervg
     - name: Configuring docker storage
+      tags: docker-storage
       shell: '/usr/bin/docker-storage-setup'
     - name: Managing container logs
       lineinfile:
@@ -60,9 +62,6 @@
       yum:
         name: '{{ item }}'
         enablerepo: epel
-      tags:
-        - openshift-ansible
-        - openshift-ansible-repo
       loop:
         - ansible
         - pyOpenSSL
@@ -75,3 +74,9 @@
         group: '{{ ansible_user }}'
     - name: Reboot the server
       reboot:
+    - name: Enable docker
+      shell: 'sudo systemctl enable docker'
+    - name: Start docker
+      serviced:
+        name: docker
+        state: running

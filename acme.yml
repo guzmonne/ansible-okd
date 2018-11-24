@@ -28,7 +28,7 @@
     csr: './secret/{{resource}}/{{ resource }}.csr'
     cert: './secret/{{resource}}/{{ resource }}.cer'
     chain: './secret/{{resource}}/ca.cer'
-    fullchain: './secret/{{resource}}/fullchain.crt'
+    fullchain: './secret/{{resource}}/fullchain.cer'
     production: False
   tasks:
     - name: Check variables

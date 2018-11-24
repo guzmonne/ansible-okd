@@ -13,4 +13,5 @@ dependencies:
   - psacct
   - atomic
   - docker-1.13.1
-
+kp_name: okd_kp
+kp_file: './secret/{{kp_name}}.pem'
